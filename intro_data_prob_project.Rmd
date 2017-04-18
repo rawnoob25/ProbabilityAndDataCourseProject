@@ -1,0 +1,393 @@
+---
+title: "Exploring the BRFSS data"
+output: 
+  html_document: 
+    fig_height: 4
+    highlight: pygments
+    theme: spacelab
+---
+
+---
+
+
+
+---
+
+## Setup
+
+### Load packages
+
+```{r load-packages, message = FALSE}
+library(knitr)
+library(ggplot2)
+library(dplyr)
+library(lubridate)
+library(broom)
+library(nlme)
+library(stringr)
+library(RColorBrewer)
+```
+
+### Load data
+Note: brfss2013.RData MUST be in the same working directory in order for this to work
+
+```{r load-data}
+load("brfss2013.RData")
+brfss2013Data<-brfss2013
+rm(brfss2013)
+```
+
+
+
+* * *
+
+## Part 1: Data
+**Scope of Generalizability:** This study used random digit dialing to automate the decision of whose in the sample. The sampling frame was the non-institutionalized population. It's reasonable to assume that the sample of individuals surveyed is representation of the non-institutionalized population.
+
+**Can causal attributions be made?:** ***No causal attributions can be made from this study.*** This is because there were no treatments present in this study, so the question of random assignment of subjects to treatments is not even relevant. This survey is in essence a prospective observational study in that subjects are chosen in advance of data collection, but there are no experimental measures taken to control interactions between variables.
+
+* * *
+
+## Part 2: Research questions
+
+**Research quesion 1:**
+
+***Question:*** *Is there an association between the number of drinks per day and an individual's mental health state. Does the strength of this relationship depend on the individual's income?*
+
+***Conclusion:*** *There is a very weak association between the average number of drinks per day and the number of days in the past month with poor mental health. income stratum of the individual in consideration does not seem to either strengthen or weaken this relationship.*
+
+**Research quesion 2:**  
+
+***Question:*** *What's the share of the population in each of the contiguous 48 states and Washington, DC that's obese? When considering states' ranks on this measure, are these ranks more strongly related to ranks of the states on measures of poverty or more strongly related to ranks of the states on measures of exercise. Note that a state's poverty ranking will be determined by the share of surveyed residents belonging to households with incomes beneath  particular threshold- the thresholds used will be $10k,$15k, and $20k.  A state's exercise ranking will be determined two ways: (1)by the share of surveyed residents who said that they have not exercised in the past two months and (2)by the mean amount of time that an individual spent exercising.*  
+
+***Conclusion:*** *State rankings on measures of exercise are more strongly correlated with state rankings on obesity than are state rankings on measures of poverty. Among the two measures of exercise, the ranking of the percentage of the state that did not exercise in the past month is better correlated with the obesity ranking. Among the poverty measures, the correlation between the rankings on poverty measure and obesity gets better as the poverty measure becomes more lenient (i.e. a higher poverty threshold is used). This trend holds for household income thresholds $10,000, $15,000 and $20,000.*
+
+
+**Research quesion 3:**
+
+***Question Part A*** 
+*If someone has diabetes, high cholesterol and doesn't exercise, are they virtually guaranteed to be obese? Note that this question is in some sense the reverse of what's asked in a clinical scenario (in a clinical scenario, for example one might look at obesity as a risk factor for diabetes; here, diabetes, high cholesterol and lack of exercise are going to be treated as risk factors for the hypothetical disease of obesity). Phrased another way, is there a nonnegligable chance that someone can meet ALL the criteria of having diabetes, having high cholesterol and not exercising and still fail to be obese?* 
+
+***Conclusion Part A*** 
+*If an individual has all of the 3 associated factors (diabetes, high cholesterol and no exercise), there's still a sizeable chance (about 40%) that the individual is NOT obese. However, if this individual is not obese, there's more than a 70% chance that this individual is overweight. The BMI category distribution of those with all 3 of these factors is vastly different from the population at-large.*
+
+***Question Part B***
+*What's the chance that someone who IS obese DOES NOT exhibit any of the 3 aforementioned associated factors- i.e. what's the chance that we have an obese individual who IS NOT diabetic, DOES NOT have high cholesterol and DOES exercise? Note that here someone classified as either prediabetic or someone who is a female who was diabetic only during pregnancy is going to be classified as NOT having diabetes.*
+
+***Conclusion Part B***
+*There's a 28.55% chance that someone is obese, but IS NOT diabetic AND DOES NOT have high cholesterol AND DOES exercise.*
+
+* * *
+
+## Part 3: Exploratory data analysis
+
+
+**Research quesion 1:**
+*Is there an association between the number of drinks per day and an individual's mental health state. Does the strength of this relationship depend on the individual's income?*
+```{r}
+q1p1<-brfss2013Data%>%filter(!is.na(avedrnk2),!is.na(menthlth))%>%select(menthlth,avedrnk2)
+print(q1p1$menthlth%>%range) #the original dataset had values exceeding 30 for the number of days in the past month with poor mental health, but removing na for both the menthlth and avedrnk2 variables got rid of these values
+ggplot(data=q1p1,aes(x=menthlth,y=avedrnk2))+geom_point(shape=".",alpha=0.3)+geom_smooth(method="lm")+labs(title="Average number of Drinks per day VS\n Number of days in past month with poor mental heatlh",x='Number of Days in past month with poor mental health',y='Average number of drinks per day')
+
+model<-lm(avedrnk2~menthlth,data=q1p1)
+tidy(model)
+```
+So the model suggests that with every 10 day increase in number of days per month of poor mental health is associated only a small increase in the average number of drinks per day of 0.26. This is not at all a strong relationship. However, this could be because the vast majority of the people surveyed who responded to the number of days per month with poor mental health, have VERY FEW days with poor mental health. 75% of respondents experience 2 or fewer days with poor mental health (see below).
+```{r}
+quantile(q1p1$menthlth,probs=0.75)
+```  
+Let's try a side-by-side boxplot of the average number of drinks per day vs number of days in the past month with poor mental health, and see if we come up with anything .
+
+```{r}
+ggplot(data=q1p1,aes(x=factor(menthlth),y=avedrnk2))+geom_boxplot()+labs(title= 'Boxplots of: Average number of drinks per day BY\n Number of days with Poor mental Health',y = 'Average number of drinks per day',x = 'Number of days in past month with poor mental heatlh')
+```   
+
+The medians in the above box plot don't show any trend across the levels of the number of days in the past month with poor mental health, so it cannot be concluded that there is any discernable relationship between the average number of drinks an individual has per day and the number of days in the past month with poor mental health.  
+
+Let's see if there's a relationship between our variables of interest ((a)number of days of poor mental health in the past month and (b)average number of drinks per day) if we stratify across income category.
+
+```{r}
+q1p2<-brfss2013Data%>%filter(!is.na(menthlth),!is.na(avedrnk2),!is.na(income2))%>%select(menthlth,avedrnk2,income2)
+
+###Let's verify that the values of menthlth and income2 are in the appropriate ranges
+
+print(q1p2$menthlth%>%range)
+print(q1p2$income2%>%summary)
+
+ggplot(data=q1p2,aes(x=menthlth,y=log10(avedrnk2),col=income2))+geom_point(alpha=0.3)+geom_smooth(method="lm")+labs(title="LOG(Average Number of Drinks per Day) VS\n Number of Days with Poor Mental Heatlh BY\n HouseHold Income Stratrum",x="Number of days in past month with poor mental health",y="LOG(Average number of drinks per day)")
+
+
+q1p2Log10avedrink2<-transform(q1p2,logAvedrnk2=log10(avedrnk2))
+
+
+fitsByIncome<-lmList(avedrnk2~menthlth|income2,data=q1p2)
+
+summary(fitsByIncome)
+```
+When you look at the slopes of each linear fit of average number of drinks per day by number of days in the past month with poor mental health in the original dataset (not the log-transformed one), these slopes are in the "Estimate" column under the "menthlth"" section, you'll notice that increasing incomes don't tend to reliably strengthen or weaken the relationship between average number of drinks per day and number of days in the past month with poor mental health. 
+
+
+***Conclusion:*** *There is a very weak association between the average number of drinks per day and the number of days in the past month with poor mental health. income stratum of the individual in consideration does not seem to either strengthen or weaken this relationship.*
+
+**Research quesion 2:**  
+
+***Question:*** *What's the share of the population in each of the contiguous 48 states and Washington, DC that's obese? When considering states' ranks on this measure, are these ranks more strongly related to ranks of the states on measures of poverty or more strongly related to ranks of the states on measures of exercise. Note that a state's poverty ranking will be determined by the share of surveyed residents belonging to households with incomes beneath  particular threshold- the thresholds used will be $10k,$15k, and $20k.  A state's exercise ranking will be determined two ways: (1)by the share of surveyed residents who said that they have not exercised in the past two months and (2)by the mean amount of time that an individual spent exercising.*  
+
+
+Here's a heat map of the obesity percentage by state. 
+```{r}
+states<-map_data("state")$region%>%unique
+#filter brfss2013Data so that only the contiguous 48 states and DC are remaining and so that State and BMI_Category are the only two columns selected. Also adds 3rd column isObese.
+
+correctStates<-brfss2013Data%>%rename(State=X_state,BMI_Category=X_bmi5cat,Income_Category=income2)%>%filter(tolower(State) %in% states,!is.na(BMI_Category),!is.na(Income_Category))
+
+relevantObsAndCols<-correctStates%>%select(State,BMI_Category)%>%mutate(BMI_Category=str_trim(BMI_Category))%>%mutate(isObese=ifelse(BMI_Category=="Obese",1,0))
+
+obesityPctByState<-relevantObsAndCols%>%group_by(State)%>%summarize(Percent_Obese=round(100*sum(isObese)/n(),2))%>%arrange(desc(Percent_Obese))%>%rename("Percent Obese"=Percent_Obese)%>%as.data.frame
+
+state_geographies<-map_data("state")%>%mutate(State=tools::toTitleCase(region))%>%select(-c(region))
+
+forMap<-merge(state_geographies,obesityPctByState,by="State")
+
+reds<-brewer.pal(4, "Reds")
+
+ggplot()+geom_polygon(data=forMap, aes(x= long, y = lat, group = group, fill=`Percent Obese`), color = "white")+ggtitle("Heat map of obesity Percentage in the U.S. by state")+scale_fill_gradientn(colors=reds)+theme(legend.position = c(1, 0), legend.justification = c(1, 0))
+
+```
+
+We'll now order states by percentage of individuals from low income households. Three low-income thresholds (10k,15k and 20k) will be tried.
+
+```{r}
+##Order states by percentage of residents belonging to households with incomes of less than $10,000
+relevantObsAndCols<-correctStates%>%select(State,Income_Category)%>%mutate(Income_Category=str_trim(Income_Category))%>%mutate(IncomeLessThan10k=ifelse(grepl("^.+10.+$",Income_Category),TRUE,FALSE))
+
+pctHouseholdsLessThan10kIncomeByState<-relevantObsAndCols%>%group_by(State)%>%summarize(PercentLessThan10k=round(100*sum(IncomeLessThan10k)/n(),2))%>%arrange(desc(PercentLessThan10k))%>%rename("Percent Less Than $10,000"=PercentLessThan10k)%>%as.data.frame
+
+##Order states by percentage of residents belonging to households with incomes of less than $15,000
+relevantObsAndCols<-correctStates%>%select(State,Income_Category)%>%mutate(Income_Category=str_trim(Income_Category))%>%mutate(IncomeLessThan15k=ifelse(grepl("^.+10|15.+$",Income_Category),TRUE,FALSE))
+
+
+pctHouseholdsLessThan15kIncomeByState<-relevantObsAndCols%>%group_by(State)%>%summarize(PercentLessThan15k=round(100*sum(IncomeLessThan15k)/n(),2))%>%arrange(desc(PercentLessThan15k))%>%rename("Percent Less Than $15,000"=PercentLessThan15k)%>%as.data.frame
+
+##Order states by percentage of residents belonging to households with incomes of less than $20,000
+relevantObsAndCols<-correctStates%>%select(State,Income_Category)%>%mutate(Income_Category=str_trim(Income_Category))%>%mutate(IncomeLessThan20k=ifelse(grepl("^.+10|15|20.+$",Income_Category),TRUE,FALSE))
+
+pctHouseholdsLessThan20kIncomeByState<-relevantObsAndCols%>%group_by(State)%>%summarize(PercentLessThan20k=round(100*sum(IncomeLessThan20k)/n(),2))%>%arrange(desc(PercentLessThan20k))%>%rename("Percent Less Than $20,000"=PercentLessThan20k)%>%as.data.frame
+
+```
+
+Now for the 48 contiguous US states and the District Of Columbia, let's simultaneously look at the rankings for the obesity percentages by state, and the rankings and values for the share of the population of each state that belongs to households with incomes below each of the following three annual income thresholds- $10,000; $15,000; and $20,000.  
+
+```{r}
+#add ranks for obesity dataframe
+obesityPctByState<-obesityPctByState%>%mutate(Rank_Obesity_Pct=row.names(obesityPctByState))%>%rename("Rank Obesity Pct"=Rank_Obesity_Pct)%>%mutate(`Rank Obesity Pct`=as.numeric(`Rank Obesity Pct`))
+
+#add ranks for % households income <$10k
+pctHouseholdsLessThan10kIncomeByState<-pctHouseholdsLessThan10kIncomeByState%>%mutate(Rank_Pct_Less_Than_10k=as.integer(row.names(pctHouseholdsLessThan10kIncomeByState)))
+
+#add ranks for % households income <$15k
+pctHouseholdsLessThan15kIncomeByState<-pctHouseholdsLessThan15kIncomeByState%>%mutate(Rank_Pct_Less_Than_15k=as.integer(row.names(pctHouseholdsLessThan15kIncomeByState)))
+
+#add ranks for % households income <$20k
+pctHouseholdsLessThan20kIncomeByState<-pctHouseholdsLessThan20kIncomeByState%>%mutate(Rank_Pct_Less_Than_20k=as.integer(row.names(pctHouseholdsLessThan20kIncomeByState)))
+
+#Merge 4 tables together on 'State' variable (inner join)
+combined<-Reduce(function(x, y) merge(x, y, all=F,by='State'), list(obesityPctByState,pctHouseholdsLessThan10kIncomeByState,pctHouseholdsLessThan15kIncomeByState,pctHouseholdsLessThan20kIncomeByState))
+
+#shorten the column names using below substitution sequence
+n1<-sub(",0{3}","k",names(combined))
+n2<-sub("Less Than ","<",n1)
+n3<-sub("Percent","Pct",n2)
+n4<-sub("_Pct_Less_Than_","Pct<$",n3)
+n5<-sub("RankPct","Rank Pct",n4)
+n6<-gsub("_"," ",n5)
+names(combined)<-n6
+
+# combined$`Rank Obesity Pct`<-as.numeric(combined$`Rank Obesity Pct`) #This rank field was originally a character vector; it has to be coerced to a numeric vector in order for the "arrange" function to work properly
+combined<-combined%>%arrange(`Rank Obesity Pct`)
+
+kable(combined) #for clean table output
+```
+
+So there's not a PERFECT association between the Obesity ranks and any of the poverty rankings using any of the 3 thresholds ($10k,$15k, or $20k). However, there does seem to be some association.
+
+
+Below is a plot of the rank of each state's obesity share versus its rank of the share of its population belonging to households with annual incomes below each of the 3 income thresholds. 
+```{r}
+plot(combined$`Rank Pct<$10k`,combined$`Rank Obesity Pct`,col="red",xlab="Rank of % of state's residents belonging to\n household with annual income below threshold",ylab="Rank of State by Obesity %",main="Rank Obesity % vs Rank Poverty % for 48 \ncontiguous US States and DC",cex=0.7,xlim=c(0,100),ylim=c(0,100))
+points(combined$`Rank Pct<$15k`,combined$`Rank Obesity Pct`,col="blue",cex=0.7)
+points(combined$`Rank Pct<$20k`,combined$`Rank Obesity Pct`,col="chartreuse4",cex=0.7)
+legend("topright",lty=1,col=c("red","blue","chartreuse4"),legend=c("Threshold:$10k","Threshold:$15k","Threshold:$20k"))
+```
+
+
+Let's see how well correlated each of the three poverty rankings is with the obesity ranking.
+
+```{r}
+#Correlation btwn Obesity Rank and Poverty rank using $10k as threshold
+corWithPoverty10k<-cor(combined$`Rank Pct<$10k`,as.numeric(combined$`Rank Obesity Pct`))
+
+#Now, using $15k as the threshold
+corWithPoverty15k<-cor(combined$`Rank Pct<$15k`,as.numeric(combined$`Rank Obesity Pct`))
+
+#Now, using $20k as the threshold
+corWithPoverty20k<-cor(combined$`Rank Pct<$20k`,as.numeric(combined$`Rank Obesity Pct`))
+
+corWithPoverty10k
+corWithPoverty15k
+corWithPoverty20k
+```
+
+So it seems like the association between states' rankings on poverty and obesity is strongest when the most lenient definition of "poor" is used (individual belongs to household with income less than $20,000).
+
+Now let's look at the measures of exercise and see if perhaps their rankings are better related to the obesity rankings.
+
+
+Below is the code chunk to retrieve the ranks of the contiguous 48 states and Washington, DC by the percentage of surveyed individuals who did not exercise in the past month.
+```{r}
+correctStates<-brfss2013Data%>%rename(State=X_state,BMI_Category=X_bmi5cat)%>%filter(tolower(State) %in% states,!is.na(BMI_Category),!is.na(exerany2))
+
+relevantObsAndCols<-correctStates%>%select(State,BMI_Category,exerany2)%>%mutate(DidNotExer_bit=ifelse(exerany2=="No",1,0))
+
+pctDidNotExerciseByState<-relevantObsAndCols%>%group_by(State)%>%summarize(PctNoExercise=round(100*sum(DidNotExer_bit/n()),2))%>%arrange(desc(PctNoExercise))%>%rename("% No Exercise"=PctNoExercise)
+
+pctDidNotExerciseByState<-pctDidNotExerciseByState%>%mutate("Rank % No Exercise"=row.names(pctDidNotExerciseByState))%>%mutate(`Rank % No Exercise`=as.numeric(`Rank % No Exercise`))%>%as.data.frame
+```
+
+Below is the code chunk to retrieve the ranks of the contiguous 48 states and Washington, DC by the number of times exercised per month by surveyed individuals. It'll use the exeroft1 field in the dataset. The fields exeroft1 and exeroft2 both measure the number of times an individual has exercised either per week or per month in the past month, but exeroft2 has more missing data than exeroft1. The original data has some data elements reported as the number of times exercised in the past week and others reported as the number of times exercised in the past month. The data will be converted to number of times exercised in the past month by multiplying the value for any observation that reports per week by 4.
+
+A lower-numbered rank for a state is associated with a lower mean number of times exercised per month.  
+
+```{r}
+correctStates<-brfss2013Data%>%rename(State=X_state,BMI_Category=X_bmi5cat)%>%filter(tolower(State) %in% states,!is.na(BMI_Category),!is.na(exeroft1))
+
+relevantObsAndCols<-correctStates%>%select(State,BMI_Category,exeroft1)
+
+
+#for the field exeroft1, only values in [101,199] or those in [201,299] are valid
+filteredFurther<-relevantObsAndCols%>%filter(exeroft1 %in% 101:199|exeroft1 %in% 201:299)
+
+#The next few lines do some processing that results in a dataframe with only the State name, the BMI category and the number of times exercised per month. All data reported on a weekly basis is converted to that reported on a monthly basis.
+ex<-filteredFurther$exeroft1
+temp<-strsplit(as.character(ex),"")
+temp<-lapply(temp,function(x)x<-as.numeric(x))
+mins<-lapply(temp,function(x)ifelse(x[1]==1,4*(10*x[2]+x[3]),10*x[2]+x[3]))%>%unlist
+filteredFurther<-filteredFurther%>%mutate(Times_Exer_mnth=mins)
+filteredFurther<-filteredFurther%>%select(-c(exeroft1))
+
+avgTimesExerPerMonthByState<-filteredFurther%>%group_by(State)%>%summarize(AvgTimesExerPerMonth=round(mean(Times_Exer_mnth),2))%>%arrange(AvgTimesExerPerMonth)%>%rename("Avg. # Times Exercised/Month"=AvgTimesExerPerMonth)
+
+avgTimesExerPerMonthByState<-avgTimesExerPerMonthByState%>%mutate("Rank Avg. # Times Exercised/Month"=row.names(avgTimesExerPerMonthByState))%>%mutate(`Rank Avg. # Times Exercised/Month`=as.numeric(`Rank Avg. # Times Exercised/Month`))
+```
+So now we have one dataframe with the ranks of percentage of individuals who did not exercise in the past month by state, and another dataframe with the ranks of mean exercise time per month by state (a better rank- i.e. a lower numbered rank- is given to the state with the LOWER mean exercise time per month to prime the ranks for association with the obesity ranks). 
+
+We'll now merge these two dataframes with the obesity dataframe so we can simutaneously view the obesity ranks with these ranks of measures of exercise.
+
+```{r}
+#merge 3 tables together
+combined<-Reduce(function(x,y)merge(x,y,all=F,by='State'),list(obesityPctByState,pctDidNotExerciseByState,avgTimesExerPerMonthByState))
+combined<-combined%>%arrange(`Rank Obesity Pct`)
+kable(combined) #for clean table output
+```
+
+You can see that there does seem to be some relationship between the obesity rankings and the rankings for each of the exercise measures, but the ranking for % of individuals who did not exercise in the past month ("Rank % No Exercise" in the table above) seems to be the ranking that's better associated with the obesity ranking.
+
+Now let's take a look at a plot of this same data. 
+**Note: The exercise measure rankings are such that an association with the obesity rankings is likely. So for % of people who did not exercise in the past month, states with a higher percentage receive a better(lower-numbered) ranking; for mean number of times exercised in the past month, states with a LOWER mean receieve a better (lower-numbered) ranking**
+```{r}
+plot(combined$`Rank % No Exercise`,combined$`Rank Obesity Pct`,col="red",cex=0.7,xlab="Rank of % of state's surveyed residents \n on exercise measure",ylab="Rank of state by Obesity %",main="Rank Obesity % vs Rank of % of state's surveyed residents\n on two measures of exercise",xlim=c(0,100),ylim=c(0,100))
+points(combined$`Rank Avg. # Times Exercised/Month`,combined$`Rank Obesity Pct`,col="blue",cex=0.7)
+legend("topright",lty=1,col=c("red","blue"),legend=c("% No exercise in past month","mean # times exercised in past month"))
+```
+
+From the plot, it's pretty obvious that the ranking of the percentage of people who haven't exercised in the past month is much more strongly correlated with the obesity ranking than is the ranking of mean times exercised. 
+
+Let's look the correlations between obesity rankings and the rankings for each of the 2 exercise measure alongside the correlations between the obesity rankings and the rankings for each of the 3 poverty measures.
+```{r}
+corWithRankPctNoExercise<-cor(combined$`Rank % No Exercise`,combined$`Rank Obesity Pct`)
+corWithRankMeanExerciseTimesPerMonth<-cor(combined$`Rank Avg. # Times Exercised/Month`,combined$`Rank Obesity Pct`)
+
+corWithRankPctNoExercise
+corWithRankMeanExerciseTimesPerMonth
+corWithPoverty10k
+corWithPoverty15k
+corWithPoverty20k
+```
+
+***Conclusion:*** *State rankings on measures of exercise are more strongly correlated with state rankings on obesity than are state rankings on measures of poverty. Among the two measures of exercise, the ranking of the percentage of the state that did not exercise in the past month is better correlated with the obesity ranking. Among the poverty measures, the correlation between the rankings on poverty measure and obesity gets better as the poverty measure becomes more lenient (i.e. a higher poverty threshold is used). This trend holds for household income thresholds $10,000, $15,000 and $20,000.* 
+
+**Research quesion 3:**
+
+***Question Part A*** 
+*If someone has diabetes, high cholesterol and doesn't exercise, are they virtually guaranteed to be obese? Note that this question is in some sense the reverse of what's asked in a clinical scenario (in a clinical scenario, for example one might look at obesity as a risk factor for diabetes; here, diabetes, high cholesterol and lack of exercise are going to be treated as risk factors for the hypothetical disease of obesity). Phrased another way, is there a nonnegligable chance that someone can meet ALL the criteria of having diabetes, having high cholesterol and not exercising and still fail to be obese?* 
+
+For high cholesterol and presence of diabetes, we'll be using whether or not the individual has respectively been told that (s)he has high cholesterol or diabetes. Gestational diabetes does NOT count as diabetes.
+
+
+We'll first extract the relevant data in a data frame.
+```{r}
+#Filter observations holding risk factor values for fields toldhi2,diabete3 and exerany2. Remove na observations for field X_bmi5cat. Select relevant columns and add the variable "isObese"
+
+obsAndColsOfInterest<-brfss2013Data%>%filter(toldhi2=="Yes",exerany2=="No",diabete3=="Yes",!is.na(X_bmi5cat))%>%select(toldhi2,exerany2,diabete3,X_bmi5cat)%>%rename(diabetes=diabete3,bmiCat=X_bmi5cat,hiCholesterol=toldhi2,exercise=exerany2)%>%mutate(isObese=ifelse(bmiCat=="Obese","Yes","No"))
+
+```
+
+Here's a bar plot showing the distribution of those who have high cholesterol, don't exercise (technically haven't exercised in the past month), and are diabetic who are and are not obese.
+```{r}
+ggplot(obsAndColsOfInterest,aes(x=isObese))+geom_bar()+labs(title='Obesity presence or absence among those who do not\n exercise with hypercholesterolemia and diabetes',x='Presence(Yes) or Absence(No)')
+
+```
+
+So there's a decent chance (about 40%) that some who doesn't exercise and who has both high cholesterol and diabetes (but not gestational diabetes) is NOT obese. 
+
+Is the bulk of this 40% that's not obese, oveweight? Let's see in the bar plot of the distribution of BMI categories for this group of people who doesn't exercise and who have both diabetes and high cholesterol.
+
+```{r}
+ggplot(obsAndColsOfInterest,aes(x=bmiCat))+geom_bar()+labs(title="BMI categories of those who do not\n exercise with hypercholesterolemia and diabetes",x="BMI Category")
+
+```
+
+Okay, so the bulk of individuals in our group of interest who aren't obese are indeed overweight. 
+
+How does the above distribution (for those who don't exercise with diabetes and high cholesterol) compare to the distribution for the entire sample surveyed? Let's see below.
+
+```{r}
+forFullSampleBarPlot<-brfss2013Data%>%filter(!is.na(X_bmi5cat))%>%rename(bmiCat=X_bmi5cat)%>%select(bmiCat)
+
+ggplot(forFullSampleBarPlot,aes(x=bmiCat))+geom_bar()+labs(title="BMI categories of all surveyed individuals with nonmissing data",x="BMI Category")
+```
+
+It's clearly quite a bit different!
+
+***Conclusion Part A*** 
+*If an individual has all of the 3 associated factors (diabetes, high cholesterol and no exercise), there's still a sizeable chance (about 40%) that the individual is NOT obese. However, if this individual is not obese, there's more than a 70% chance that this individual is overweight. The BMI category distribution of those with all 3 of these factors is vastly different from the population at-large.*
+
+
+***Question Part B***
+*What's the chance that someone who IS obese DOES NOT exhibit any of the 3 aforementioned associated factors- i.e. what's the chance that we have an obese individual who IS NOT diabetic, DOES NOT have high cholesterol and DOES exercise? Note that here someone classified as either prediabetic or someone who is a female who was diabetic only during pregnancy is going to be classified as NOT having diabetes.*
+
+
+Below is the code chunk to set up the data to answer this question.
+
+```{r}
+relevantObsAndCols<-brfss2013Data%>%filter(X_bmi5cat=="Obese",!is.na(toldhi2),!is.na(diabete3),!is.na(exerany2))%>%rename(bmiCat=X_bmi5cat,diabetes=diabete3,hiCholesterol=toldhi2,exercise=exerany2)%>%select(bmiCat,diabetes,hiCholesterol,exercise)%>%mutate(doesNotHaveDiabetes=ifelse(diabetes!="Yes",1,0),doesNotHaveHighCholesterol=ifelse(hiCholesterol=="No",1,0),doesExercise=ifelse(exercise=="Yes",1,0))%>%mutate(noAssociatedFactors=ifelse(doesNotHaveDiabetes==1&doesNotHaveHighCholesterol==1&doesExercise==1,1,0))%>%mutate(noFactorsPresent=ifelse(noAssociatedFactors==1,"Yes","No"))
+
+```
+
+Here's the percentage of obese in the study people who are NOT diabetic AND do NOT have high cholesterol AND do exercise.
+
+```{r}
+pct<-relevantObsAndCols%>%select(noAssociatedFactors)%>%summarize(Percentage=round(100*sum(noAssociatedFactors)/n(),2))
+
+pct[1,1]
+```
+
+And finally here's a bar plot of the obese by whether or not they completely lack any of the 3 associated factors (Diabetic, High Cholesterol, No Exercise).
+```{r}
+ggplot(data=relevantObsAndCols,aes(x=noFactorsPresent))+geom_bar()+labs(title="Absence of at least ONE among\n (diabetes,hypercholesterolemia, and no exercise) in the obese population",x="Lacks all factors (Yes) or has at least one factor(No)")
+```
+
+So, the overwhelming majority (about 72.45%) of the obese individuals in the study (there were 113,517 obese people out of the 491,775 subjects) had at least one associated factor among diabetes, hypercholesterolemia and lack of exercise.  
+
+***Conclusion Part B***
+*There's a 28.55% chance that someone is obese, but IS NOT diabetic AND DOES NOT have high cholesterol AND DOES exercise.*
